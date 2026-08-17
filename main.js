@@ -14,7 +14,7 @@ const { app, BrowserWindow, Tray, Menu, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { spawn, execFile } = require('child_process');
+const { spawn, execFile, execFileSync } = require('child_process');
 const http = require('http');
 const https = require('https');
 
@@ -214,9 +214,31 @@ function sessionFiles() {
   return out;
 }
 
+// zstd 可执行文件探测：Finder/launchd 启动时 PATH 不含 Homebrew，必须用绝对路径
+let ZSTD_BIN = null;
+function resolveZstd() {
+  if (ZSTD_BIN) return ZSTD_BIN;
+  const candidates = [
+    process.env.DSH_ZSTD,
+    '/opt/homebrew/bin/zstd',   // Apple Silicon Homebrew
+    '/usr/local/bin/zstd',      // Intel Homebrew
+    '/usr/bin/zstd',
+  ].filter(Boolean);
+  for (const c of candidates) {
+    try { fs.accessSync(c, fs.constants.X_OK); ZSTD_BIN = c; return c; } catch {}
+  }
+  try {
+    const which = execFileSync('which', ['zstd'], { encoding: 'utf8', timeout: 3000 }).trim();
+    if (which) { ZSTD_BIN = which; return which; }
+  } catch {}
+  return null;
+}
+
 function scanSessionFile(file, onLine) {
   return new Promise((resolve) => {
-    const child = spawn('zstd', ['-dc', '--no-check', file]);
+    const bin = resolveZstd();
+    if (!bin) return resolve();
+    const child = spawn(bin, ['-dc', '--no-check', file]);
     let buf = '';
     child.stdout.on('data', (chunk) => {
       buf += chunk;
@@ -242,6 +264,7 @@ function fmtTokens(n) {
 
 async function fetchTodayTokens() {
   try {
+    if (!resolveZstd()) return null; // 无 zstd：显示"不可用"而不是 0
     const start = todayStartMs();
     const nowMs = Date.now();
     const totals = { input: 0, output: 0, cache: 0, calls: 0 };
