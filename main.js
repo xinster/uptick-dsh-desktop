@@ -255,11 +255,19 @@ function scanSessionFile(file, onLine) {
   });
 }
 
-function fmtTokens(n) {
+// 今日 token 总数：以亿为单位（如 0.016亿 / 1.25亿）
+function fmtTokensYi(n) {
   if (!n) return '0';
-  if (n >= 1e8) return (n / 1e8).toFixed(2).replace(/\.?0+$/, '') + '亿';
-  if (n >= 1e4) return (n / 1e4).toFixed(1).replace(/\.0$/, '') + '万';
-  return String(n);
+  const yi = n / 1e8;
+  const s = yi >= 1 ? yi.toFixed(2) : yi.toFixed(3);
+  return s.replace(/\.?0+$/, '') + '亿';
+}
+
+// 明细：以 M（百万）为单位（如 1.28M / 0.27M）
+function fmtTokensM(n) {
+  if (!n) return '0';
+  const m = n / 1e6;
+  return m.toFixed(2).replace(/\.?0+$/, '') + 'M';
 }
 
 async function fetchTodayTokens() {
@@ -287,9 +295,9 @@ async function fetchTodayTokens() {
     const total = totals.input + totals.output;
     return {
       total,
-      totalFmt: fmtTokens(total),
-      inputFmt: fmtTokens(totals.input),
-      outputFmt: fmtTokens(totals.output),
+      totalFmt: fmtTokensYi(total),
+      inputFmt: fmtTokensM(totals.input),
+      outputFmt: fmtTokensM(totals.output),
       callsFmt: String(totals.calls),
     };
   } catch {
