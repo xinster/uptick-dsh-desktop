@@ -136,6 +136,7 @@ const USAGE_CARD_CSS = `
 #ds-usage-card .ds-u-session.peak { color: #c2410c; }
 #ds-usage-card .ds-usage-body { display: none; margin-top: 6px; font-size: 11px; color: rgba(15,17,21,.55); line-height: 1.8; border-top: 1px solid rgba(15,17,21,.08); padding-top: 6px; }
 #ds-usage-card.open .ds-usage-body { display: block; }
+#ds-usage-card .ds-u-today-detail { font-size: 10px; color: rgba(15,17,21,.45); }
 #ds-usage-card .ds-usage-body b { color: rgb(15,17,21); }
 #ds-usage-card a { color: #1d4ed8; text-decoration: none; display: inline-block; margin-top: 2px; }
 `;
@@ -171,13 +172,99 @@ function fetchBalance() {
   });
 }
 
+/* ---------------- 今日 token 用量（本地统计 DSH 会话日志） ---------------- */
+
+function todayStartMs() {
+  // 北京时间今日零点对应的 epoch ms（本地时区无关）
+  const now = new Date();
+  const beijing = new Date(now.getTime() + 8 * 3600 * 1000);
+  return Date.UTC(beijing.getUTCFullYear(), beijing.getUTCMonth(), beijing.getUTCDate()) - 8 * 3600 * 1000;
+}
+
+function sessionFiles() {
+  const out = [];
+  const root = path.join(os.homedir(), '.dsh', 'sessions');
+  try {
+    if (!fs.existsSync(root)) return out;
+    for (const dir of fs.readdirSync(root)) {
+      const p = path.join(root, dir);
+      if (!fs.statSync(p).isDirectory()) continue;
+      for (const sub of fs.readdirSync(p)) {
+        const f = path.join(p, sub, 'session.jsonl.zstd');
+        if (fs.existsSync(f)) out.push(f);
+      }
+    }
+  } catch {}
+  return out;
+}
+
+function scanSessionFile(file, onLine) {
+  return new Promise((resolve) => {
+    const child = spawn('zstd', ['-dc', '--no-check', file]);
+    let buf = '';
+    child.stdout.on('data', (chunk) => {
+      buf += chunk;
+      let idx;
+      while ((idx = buf.indexOf('\n')) !== -1) {
+        const line = buf.slice(0, idx);
+        buf = buf.slice(idx + 1);
+        if (line.length > 30) onLine(line);
+      }
+      if (buf.length > 2 * 1024 * 1024) buf = buf.slice(-1024);
+    });
+    child.on('error', () => resolve());
+    child.on('close', () => { if (buf.length > 30) onLine(buf); resolve(); });
+  });
+}
+
+function fmtTokens(n) {
+  if (!n) return '0';
+  if (n >= 1e8) return (n / 1e8).toFixed(2).replace(/\.?0+$/, '') + '亿';
+  if (n >= 1e4) return (n / 1e4).toFixed(1).replace(/\.0$/, '') + '万';
+  return String(n);
+}
+
+async function fetchTodayTokens() {
+  try {
+    const start = todayStartMs();
+    const nowMs = Date.now();
+    const totals = { input: 0, output: 0, cache: 0, calls: 0 };
+    for (const f of sessionFiles()) {
+      await scanSessionFile(f, (line) => {
+        if (!line.includes('"type":"assistant/chunk"')) return;
+        let j;
+        try { j = JSON.parse(line); } catch { return; }
+        const t = j.time;
+        if (typeof t !== 'number' || t < start || t > nowMs) return;
+        const c = j.data && j.data.chunk;
+        if (!c || c.type !== 'usage' || !c.usage) return;
+        const u = c.usage;
+        totals.input += u.inputTokens || 0;
+        totals.output += u.outputTokens || 0;
+        totals.cache += u.cacheReadTokens || 0;
+        totals.calls++;
+      });
+    }
+    const total = totals.input + totals.output;
+    return {
+      total,
+      totalFmt: fmtTokens(total),
+      inputFmt: fmtTokens(totals.input),
+      outputFmt: fmtTokens(totals.output),
+      callsFmt: String(totals.calls),
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function updateUsagePanel(win) {
   if (!win || win.isDestroyed()) return;
-  const bal = await fetchBalance();
+  const [bal, tok] = await Promise.all([fetchBalance(), fetchTodayTokens()]);
   const info = bal && Array.isArray(bal.balance_infos) ? bal.balance_infos[0] : null;
   const hh = new Date().getUTCHours() + new Date().getUTCMinutes() / 60;
   const isPeak = (hh >= 1 && hh < 4) || (hh >= 6 && hh < 10);
-  writeLog(`balance fetch: ${info ? `total=${info.total_balance} topped=${info.topped_up_balance} granted=${info.granted_balance}` : 'null'} session=${isPeak ? 'peak' : 'off-peak'}`);
+  writeLog(`balance fetch: ${info ? `total=${info.total_balance} topped=${info.topped_up_balance} granted=${info.granted_balance}` : 'null'} session=${isPeak ? 'peak' : 'off-peak'} todayTokens=${tok ? tok.total : 'n/a'}`);
   const js = `(() => {
     const set = (sel, v) => { const el = document.querySelector('#ds-usage-card ' + sel); if (el) el.textContent = v; };
     ${info
@@ -186,6 +273,12 @@ async function updateUsagePanel(win) {
     set('.ds-u-grant', '¥' + ${JSON.stringify(info.granted_balance)});
     set('.ds-u-time', new Date().toLocaleTimeString('zh-CN'));`
       : `set('.ds-usage-balance', '不可用');`}
+    ${tok
+      ? `set('.ds-u-today', ${JSON.stringify(tok.totalFmt)});
+    set('.ds-u-in', ${JSON.stringify(tok.inputFmt)});
+    set('.ds-u-out', ${JSON.stringify(tok.outputFmt)});
+    set('.ds-u-calls', ${JSON.stringify(tok.callsFmt)});`
+      : `set('.ds-u-today', '不可用');`}
     const now = new Date();
     const h = now.getUTCHours() + now.getUTCMinutes() / 60;
     const peak = (h >= 1 && h < 4) || (h >= 6 && h < 10);
@@ -208,6 +301,8 @@ function injectUsagePanel(win) {
     d.innerHTML = '<div class="ds-usage-head"><span>💰 余额</span><span class="ds-usage-spacer"></span><span class="ds-usage-balance">…</span><span class="ds-usage-peak">…</span></div>' +
       '<div class="ds-usage-body">' +
       '<div>当前时段 <b class="ds-u-session">…</b></div>' +
+      '<div>今日 tokens <b class="ds-u-today">…</b></div>' +
+      '<div class="ds-u-today-detail">输入 <b class="ds-u-in">…</b> · 输出 <b class="ds-u-out">…</b> · <b class="ds-u-calls">…</b> 次调用</div>' +
       '<div>充值 <b class="ds-u-top">…</b></div>' +
       '<div>赠送 <b class="ds-u-grant">…</b></div>' +
       '<div>更新 <span class="ds-u-time">…</span></div>' +
