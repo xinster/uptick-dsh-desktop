@@ -13,6 +13,7 @@
 const { app, BrowserWindow, Tray, Menu, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { spawn, execFile } = require('child_process');
 const http = require('http');
 const https = require('https');
@@ -105,6 +106,115 @@ function applyFontScale(win) {
   }).catch((e) => {
     writeLog(`font scale failed: ${e.message}`);
   });
+}
+
+/* ---------------- 余额用量卡片（注入 DSH 页面右下角） ---------------- */
+
+const USAGE_CARD_CSS = `
+#ds-usage-card {
+  position: fixed; right: 14px; bottom: 14px; z-index: 99999;
+  font-family: -apple-system, 'PingFang SC', sans-serif;
+  background: rgba(20,22,28,.92); border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px; color: #e8e8e8; font-size: 12px;
+  padding: 8px 12px; cursor: pointer; min-width: 160px;
+  backdrop-filter: blur(6px); user-select: none;
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+}
+#ds-usage-card .ds-usage-head { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+#ds-usage-card .ds-usage-spacer { flex: 1; }
+#ds-usage-card .ds-usage-balance { color: #f7931e; }
+#ds-usage-card .ds-usage-peak { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 8px; background: rgba(52,199,89,.16); color: #34c759; white-space: nowrap; }
+#ds-usage-card .ds-usage-peak.peak { background: rgba(255,149,0,.18); color: #ff9500; }
+#ds-usage-card .ds-u-session { color: #34c759; }
+#ds-usage-card .ds-u-session.peak { color: #ff9500; }
+#ds-usage-card .ds-usage-body { display: none; margin-top: 6px; font-size: 11px; color: #a8a8a8; line-height: 1.8; border-top: 1px solid rgba(255,255,255,.08); padding-top: 6px; }
+#ds-usage-card.open .ds-usage-body { display: block; }
+#ds-usage-card .ds-usage-body b { color: #e8e8e8; }
+#ds-usage-card a { color: #7fa0ff; text-decoration: none; display: inline-block; margin-top: 2px; }
+`;
+
+function shellApiKey() {
+  try {
+    const t = fs.readFileSync(path.join(os.homedir(), '.dsh', '.credentials.yaml'), 'utf8');
+    const m = t.match(/^DEEPSEEK_API_KEY\s*:\s*["']?([^"'\r\n]+)/m);
+    return m && m[1] ? m[1].trim() : '';
+  } catch {
+    return '';
+  }
+}
+
+function fetchBalance() {
+  const key = shellApiKey();
+  if (!key) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const req = https.get({
+      hostname: 'api.deepseek.com',
+      path: '/user/balance',
+      headers: { Authorization: `Bearer ${key}` },
+      timeout: 10000,
+    }, (res) => {
+      let d = '';
+      res.on('data', (c) => { d += c; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(d)); } catch { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+}
+
+async function updateUsagePanel(win) {
+  if (!win || win.isDestroyed()) return;
+  const bal = await fetchBalance();
+  const info = bal && Array.isArray(bal.balance_infos) ? bal.balance_infos[0] : null;
+  const hh = new Date().getUTCHours() + new Date().getUTCMinutes() / 60;
+  const isPeak = (hh >= 1 && hh < 4) || (hh >= 6 && hh < 10);
+  writeLog(`balance fetch: ${info ? `total=${info.total_balance} topped=${info.topped_up_balance} granted=${info.granted_balance}` : 'null'} session=${isPeak ? 'peak' : 'off-peak'}`);
+  const js = `(() => {
+    const set = (sel, v) => { const el = document.querySelector('#ds-usage-card ' + sel); if (el) el.textContent = v; };
+    ${info
+      ? `set('.ds-usage-balance', '¥' + ${JSON.stringify(info.total_balance)});
+    set('.ds-u-top', '¥' + ${JSON.stringify(info.topped_up_balance)});
+    set('.ds-u-grant', '¥' + ${JSON.stringify(info.granted_balance)});
+    set('.ds-u-time', new Date().toLocaleTimeString('zh-CN'));`
+      : `set('.ds-usage-balance', '不可用');`}
+    const now = new Date();
+    const h = now.getUTCHours() + now.getUTCMinutes() / 60;
+    const peak = (h >= 1 && h < 4) || (h >= 6 && h < 10);
+    const pk = document.querySelector('#ds-usage-card .ds-usage-peak');
+    if (pk) { pk.textContent = peak ? '高峰' : '空闲'; pk.classList.toggle('peak', peak); }
+    const ss = document.querySelector('#ds-usage-card .ds-u-session');
+    if (ss) { ss.textContent = peak ? '高峰（价格翻倍）' : '空闲（半价优惠）'; ss.classList.toggle('peak', peak); }
+    const card = document.getElementById('ds-usage-card'); if (card) card.style.display = 'block';
+  })()`;
+  try { await win.webContents.executeJavaScript(js); } catch (e) { writeLog('usage update failed: ' + e.message); }
+}
+
+function injectUsagePanel(win) {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.insertCSS(USAGE_CARD_CSS).catch(() => {});
+  win.webContents.executeJavaScript(`(() => {
+    if (document.getElementById('ds-usage-card')) return;
+    const d = document.createElement('div');
+    d.id = 'ds-usage-card';
+    d.innerHTML = '<div class="ds-usage-head"><span>💰 余额</span><span class="ds-usage-spacer"></span><span class="ds-usage-balance">…</span><span class="ds-usage-peak">…</span></div>' +
+      '<div class="ds-usage-body">' +
+      '<div>当前时段 <b class="ds-u-session">…</b></div>' +
+      '<div>充值 <b class="ds-u-top">…</b></div>' +
+      '<div>赠送 <b class="ds-u-grant">…</b></div>' +
+      '<div>更新 <span class="ds-u-time">…</span></div>' +
+      '<a href="https://platform.deepseek.com/usage" target="_blank" rel="noopener">查看用量明细 ↗</a>' +
+      '</div>';
+    d.querySelector('.ds-usage-head').addEventListener('click', () => d.classList.toggle('open'));
+    d.querySelector('a').addEventListener('click', (e) => {
+      e.preventDefault();
+      window.open('https://platform.deepseek.com/usage', '_blank');
+    });
+    document.body.appendChild(d);
+  })()`).catch(() => {});
+  updateUsagePanel(win);
+  writeLog('usage panel injected');
 }
 
 /* ---------------- 日志 ---------------- */
@@ -244,7 +354,10 @@ function createWindow(url) {
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.on('closed', () => { mainWindow = null; });
   // 页面加载/重载后应用字体缩放（SPA 重路由不触发，但服务重启重载会）
-  mainWindow.webContents.on('did-finish-load', () => applyFontScale(mainWindow));
+  mainWindow.webContents.on('did-finish-load', () => {
+    applyFontScale(mainWindow);
+    injectUsagePanel(mainWindow);
+  });
 
   // 外部链接用系统浏览器打开
   mainWindow.webContents.setWindowOpenHandler(({ url: target }) => {
@@ -590,6 +703,8 @@ if (!gotLock) {
     if (config().updateUrl && !SMOKE_TEST) {
       setTimeout(() => checkForUpdates(false), UPDATE_CHECK_DELAY_MS);
     }
+    // 余额卡片每 5 分钟刷新
+    setInterval(() => { if (mainWindow && !mainWindow.isDestroyed()) updateUsagePanel(mainWindow); }, 300000);
   });
 
   app.on('window-all-closed', () => {
