@@ -139,6 +139,22 @@ const USAGE_CARD_CSS = `
 #ds-usage-card .ds-u-today-detail { font-size: 10px; color: rgba(15,17,21,.45); }
 #ds-usage-card .ds-usage-body b { color: rgb(15,17,21); }
 #ds-usage-card a { color: #1d4ed8; text-decoration: none; display: inline-block; margin-top: 2px; }
+/* 深色主题跟随主应用（DSH 以 body[data-ds-dark-theme] 控制深色） */
+body[data-ds-dark-theme] #ds-usage-card {
+  background: rgba(27,27,28,.97);
+  border-color: rgba(255,255,255,.10);
+  color: rgb(249,250,251);
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+}
+body[data-ds-dark-theme] #ds-usage-card .ds-usage-balance { color: #f7931e; }
+body[data-ds-dark-theme] #ds-usage-card .ds-usage-peak { background: rgba(52,199,89,.16); color: #34c759; }
+body[data-ds-dark-theme] #ds-usage-card .ds-usage-peak.peak { background: rgba(255,149,0,.18); color: #ff9500; }
+body[data-ds-dark-theme] #ds-usage-card .ds-u-session { color: #34c759; }
+body[data-ds-dark-theme] #ds-usage-card .ds-u-session.peak { color: #ff9500; }
+body[data-ds-dark-theme] #ds-usage-card .ds-usage-body { color: rgba(249,250,251,.55); border-top-color: rgba(255,255,255,.08); }
+body[data-ds-dark-theme] #ds-usage-card .ds-u-today-detail { color: rgba(249,250,251,.45); }
+body[data-ds-dark-theme] #ds-usage-card .ds-usage-body b { color: rgb(249,250,251); }
+body[data-ds-dark-theme] #ds-usage-card a { color: #7fa0ff; }
 `;
 
 function shellApiKey() {
@@ -806,7 +822,7 @@ if (!gotLock) {
       setTimeout(() => checkForUpdates(false), UPDATE_CHECK_DELAY_MS);
     }
     // 余额卡片每 5 分钟刷新
-    setInterval(() => { if (mainWindow && !mainWindow.isDestroyed()) updateUsagePanel(mainWindow); }, 300000);
+    setInterval(() => { if (mainWindow && !mainWindow.isDestroyed()) updateUsagePanel(mainWindow); }, 60000);
   });
 
   app.on('window-all-closed', () => {
