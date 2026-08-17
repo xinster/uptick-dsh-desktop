@@ -112,25 +112,32 @@ function applyFontScale(win) {
 
 const USAGE_CARD_CSS = `
 #ds-usage-card {
-  position: fixed; right: 14px; bottom: 14px; z-index: 99999;
+  position: fixed; left: 8px; bottom: 56px; z-index: 99999;
   font-family: -apple-system, 'PingFang SC', sans-serif;
-  background: rgba(20,22,28,.92); border: 1px solid rgba(255,255,255,.12);
-  border-radius: 10px; color: #e8e8e8; font-size: 12px;
-  padding: 8px 12px; cursor: pointer; min-width: 160px;
-  backdrop-filter: blur(6px); user-select: none;
-  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  background: rgba(249,250,251,.97);
+  border: 1px solid rgba(15,17,21,.08);
+  border-radius: 12px;
+  color: rgb(15,17,21);
+  font-size: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  min-width: 170px;
+  max-width: 260px;
+  backdrop-filter: blur(6px);
+  user-select: none;
+  box-shadow: 0 8px 24px rgba(15,17,21,.10);
 }
 #ds-usage-card .ds-usage-head { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 #ds-usage-card .ds-usage-spacer { flex: 1; }
-#ds-usage-card .ds-usage-balance { color: #f7931e; }
-#ds-usage-card .ds-usage-peak { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 8px; background: rgba(52,199,89,.16); color: #34c759; white-space: nowrap; }
-#ds-usage-card .ds-usage-peak.peak { background: rgba(255,149,0,.18); color: #ff9500; }
-#ds-usage-card .ds-u-session { color: #34c759; }
-#ds-usage-card .ds-u-session.peak { color: #ff9500; }
-#ds-usage-card .ds-usage-body { display: none; margin-top: 6px; font-size: 11px; color: #a8a8a8; line-height: 1.8; border-top: 1px solid rgba(255,255,255,.08); padding-top: 6px; }
+#ds-usage-card .ds-usage-balance { color: #d97706; }
+#ds-usage-card .ds-usage-peak { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 8px; background: rgba(21,128,61,.12); color: #15803d; white-space: nowrap; }
+#ds-usage-card .ds-usage-peak.peak { background: rgba(194,65,12,.12); color: #c2410c; }
+#ds-usage-card .ds-u-session { color: #15803d; }
+#ds-usage-card .ds-u-session.peak { color: #c2410c; }
+#ds-usage-card .ds-usage-body { display: none; margin-top: 6px; font-size: 11px; color: rgba(15,17,21,.55); line-height: 1.8; border-top: 1px solid rgba(15,17,21,.08); padding-top: 6px; }
 #ds-usage-card.open .ds-usage-body { display: block; }
-#ds-usage-card .ds-usage-body b { color: #e8e8e8; }
-#ds-usage-card a { color: #7fa0ff; text-decoration: none; display: inline-block; margin-top: 2px; }
+#ds-usage-card .ds-usage-body b { color: rgb(15,17,21); }
+#ds-usage-card a { color: #1d4ed8; text-decoration: none; display: inline-block; margin-top: 2px; }
 `;
 
 function shellApiKey() {
