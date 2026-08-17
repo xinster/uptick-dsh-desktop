@@ -292,12 +292,14 @@ async function fetchTodayTokens() {
         totals.calls++;
       });
     }
-    const total = totals.input + totals.output;
+    // 总 token = 输入(未命中) + 输出 + 缓存命中（DeepSeek 平台用量为全量 token）
+    const total = totals.input + totals.output + totals.cache;
     return {
       total,
       totalFmt: fmtTokensYi(total),
       inputFmt: fmtTokensM(totals.input),
       outputFmt: fmtTokensM(totals.output),
+      cacheFmt: fmtTokensYi(totals.cache),
       callsFmt: String(totals.calls),
     };
   } catch {
@@ -324,6 +326,7 @@ async function updateUsagePanel(win) {
       ? `set('.ds-u-today', ${JSON.stringify(tok.totalFmt)});
     set('.ds-u-in', ${JSON.stringify(tok.inputFmt)});
     set('.ds-u-out', ${JSON.stringify(tok.outputFmt)});
+    set('.ds-u-cache', ${JSON.stringify(tok.cacheFmt)});
     set('.ds-u-calls', ${JSON.stringify(tok.callsFmt)});`
       : `set('.ds-u-today', '不可用');`}
     const now = new Date();
@@ -349,7 +352,8 @@ function injectUsagePanel(win) {
       '<div class="ds-usage-body">' +
       '<div>当前时段 <b class="ds-u-session">…</b></div>' +
       '<div>今日 tokens <b class="ds-u-today">…</b></div>' +
-      '<div class="ds-u-today-detail">输入 <b class="ds-u-in">…</b> · 输出 <b class="ds-u-out">…</b> · <b class="ds-u-calls">…</b> 次调用</div>' +
+      '<div class="ds-u-today-detail">输入 <b class="ds-u-in">…</b> · 输出 <b class="ds-u-out">…</b></div>' +
+      '<div class="ds-u-today-detail">缓存 <b class="ds-u-cache">…</b> · <b class="ds-u-calls">…</b> 次调用</div>' +
       '<div>充值 <b class="ds-u-top">…</b></div>' +
       '<div>赠送 <b class="ds-u-grant">…</b></div>' +
       '<div>更新 <span class="ds-u-time">…</span></div>' +
