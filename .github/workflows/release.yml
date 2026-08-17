@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing v-prefixed tag to publish
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -13,12 +18,16 @@ jobs:
   build:
     name: Build macOS ${{ matrix.arch }}
     runs-on: macos-15
+    env:
+      TAG_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     strategy:
       fail-fast: false
       matrix:
         arch: [arm64, x64]
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - uses: actions/setup-node@v5
         with:
@@ -33,7 +42,7 @@ jobs:
 
       - name: Package app (${{ matrix.arch }})
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${TAG_NAME#v}"
           npx electron-packager . DeepSeekHarnessDesktop \
             --platform=darwin --arch=${{ matrix.arch }} \
             --overwrite --asar \
@@ -64,7 +73,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
-      RELEASE_TAG: ${{ github.ref_name }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v5
 
