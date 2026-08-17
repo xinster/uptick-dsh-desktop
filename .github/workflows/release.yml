@@ -1,0 +1,82 @@
+name: Build and publish desktop release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build macOS ${{ matrix.arch }}
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Syntax check
+        run: node --check main.js
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Package app (${{ matrix.arch }})
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          npx electron-packager . DeepSeekHarnessDesktop \
+            --platform=darwin --arch=${{ matrix.arch }} \
+            --overwrite --asar \
+            --app-bundle-id=com.dsh.shell --app-version="$VERSION" \
+            --icon=assets/icon.icns \
+            --out=dist --download.cacheRoot=.electron-cache \
+            --ignore="^/(\.electron-cache|npm-cache|\.user-data|scripts|dist|release)(/|$)"
+
+      - name: Create dmg
+        run: |
+          mkdir -p release
+          hdiutil create \
+            -volname "DeepSeek Harness Desktop" \
+            -srcfolder "dist/DeepSeekHarnessDesktop-darwin-${{ matrix.arch }}/DeepSeekHarnessDesktop.app" \
+            -ov -format UDZO \
+            "release/DeepSeekHarnessDesktop-macos-${{ matrix.arch }}.dmg"
+          cp dsh-usage-card.user.js release/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: macos-${{ matrix.arch }}
+          path: release/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: macos-*
+          path: release
+          merge-multiple: true
+
+      - name: Create or update release
+        run: |
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag --generate-notes --title "DeepSeek Harness Desktop $RELEASE_TAG"
+          fi
+          gh release upload "$RELEASE_TAG" release/* --clobber

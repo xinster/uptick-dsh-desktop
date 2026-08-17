@@ -20,8 +20,30 @@
 - 🔤 **字体缩放**：运行时提取页面全部 `--dsw-font-*-font-size` CSS 变量按档位缩放（小 0.85x / 中 1.0x / 大 1.15x），布局不动、纯字号调节，默认小字体
 - 🔄 **自动更新**：`config.json` 配置 `updateUrl`（JSON：`{version, url, notes}`）后启动静默检查 → 弹窗确认 → 下载 zip → 解压替换（失败自动回滚）→ 提示重启
 - 🛡️ **退出清理**：退出时终止自启的服务子进程；服务意外退出弹窗提醒
+- 💰 **余额/用量浮窗**：左侧栏 Settings 上方常驻浮窗——实时余额（充值/赠送拆分）、**高峰/空闲时段**徽章（官方峰谷定价：UTC 01–04 / 06–10 为高峰，空闲半价）、**今日 token 用量**（本地统计 DSH 会话日志，输入/输出/调用次数），每 5 分钟刷新；点击展开明细
 - 🪵 **日志**：服务输出写 `userData/service.log`，托盘一键打开
 - 🔒 **单实例**：统一 userData，任何启动方式只允许一个实例
+
+## 获取与分享（两种方式）
+
+### 方式 A：完整桌面应用（推荐，功能最全）
+
+macOS（Apple 芯片 / Intel）安装包从 **GitHub Releases** 下载：
+
+> <https://github.com/xinster/uptick-dsh-desktop/releases>
+
+下载 `DeepSeekHarnessDesktop-macos-<架构>.dmg` 后：
+
+1. 双击挂载 → 把 `DeepSeekHarnessDesktop.app` 拖入「应用程序」
+2. 首次打开若提示"无法验证开发者"：**右键点 App → 打开**（或终端执行 `xattr -dr com.apple.quarantine /Applications/DeepSeekHarnessDesktop.app`）
+3. 启动后自动拉起本地 DSH 服务（需本机装有 Node.js 与 `npx @deepseek-ai/dsh web`），余额读取 `~/.dsh/.credentials.yaml` 的 `DEEPSEEK_API_KEY`
+
+### 方式 B：油猴脚本（已在使用 `dsh web` 的轻量用户）
+
+浏览器装 [Tampermonkey](https://www.tampermonkey.net/) 后，导入仓库根目录的 `dsh-usage-card.user.js`（或直接从 Releases 附件下载），访问 `http://127.0.0.1:3080` 自动出现浮窗。
+
+- 首次使用点击卡片里的「设置 API Key」填入 DeepSeek API Key（仅存本机浏览器 localStorage）
+- 显示余额 + 高峰/空闲时段；浏览器沙箱读不到本地会话文件，**今日 token 用量仅完整版（方式 A）支持**
 
 ## 架构
 

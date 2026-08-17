@@ -8,3 +8,4 @@ npm-cache/
 .smoke-write.txt
 audit-report.html
 audit-report.md
+release/
