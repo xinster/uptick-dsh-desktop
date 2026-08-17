@@ -297,7 +297,8 @@ async function fetchTodayTokens() {
     return {
       total,
       totalFmt: fmtTokensYi(total),
-      inputFmt: fmtTokensM(totals.input),
+      // 输入口径与平台一致：总输入 = 缓存命中 + 未命中
+      inputFmt: fmtTokensM(totals.input + totals.cache),
       outputFmt: fmtTokensM(totals.output),
       cacheFmt: fmtTokensYi(totals.cache),
       callsFmt: String(totals.calls),
@@ -353,7 +354,7 @@ function injectUsagePanel(win) {
       '<div>当前时段 <b class="ds-u-session">…</b></div>' +
       '<div>今日 tokens <b class="ds-u-today">…</b></div>' +
       '<div class="ds-u-today-detail">输入 <b class="ds-u-in">…</b> · 输出 <b class="ds-u-out">…</b></div>' +
-      '<div class="ds-u-today-detail">缓存 <b class="ds-u-cache">…</b> · <b class="ds-u-calls">…</b> 次调用</div>' +
+      '<div class="ds-u-today-detail">其中缓存 <b class="ds-u-cache">…</b> · <b class="ds-u-calls">…</b> 次调用</div>' +
       '<div>充值 <b class="ds-u-top">…</b></div>' +
       '<div>赠送 <b class="ds-u-grant">…</b></div>' +
       '<div>更新 <span class="ds-u-time">…</span></div>' +
