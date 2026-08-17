@@ -493,6 +493,13 @@ function createWindow(url) {
   mainWindow.loadURL(url);
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
+  // macOS 标准行为：红色关闭 = 隐藏到后台（Dock 点击恢复），托盘退出/Cmd+Q 才真正退出
+  mainWindow.on('close', (e) => {
+    if (!isQuitting && !SMOKE_TEST) {
+      e.preventDefault();
+      mainWindow.hide();
+    }
+  });
   mainWindow.on('closed', () => { mainWindow = null; });
   // 页面加载/重载后应用字体缩放（SPA 重路由不触发，但服务重启重载会）
   mainWindow.webContents.on('did-finish-load', () => {
@@ -815,13 +822,17 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
+  function focusMainWindow() {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
       mainWindow.focus();
     }
-  });
+  }
+
+  app.on('second-instance', () => focusMainWindow());
+  // macOS：点击 Dock 图标时恢复隐藏/最小化的窗口（红色关闭只隐藏不销毁）
+  app.on('activate', () => focusMainWindow());
 
   app.whenReady().then(async () => {
     const { port } = config();
