@@ -1,0 +1,10 @@
+node_modules/
+dist/
+npm-cache/
+.electron-cache/
+.user-data/
+*.log
+.DS_Store
+.smoke-write.txt
+audit-report.html
+audit-report.md
