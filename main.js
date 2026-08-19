@@ -68,12 +68,12 @@ function config() {
     command: typeof c.command === 'string' && c.command.trim() ? c.command.trim() : DEFAULT_COMMAND,
     openAtLogin: Boolean(c.openAtLogin),
     updateUrl: typeof c.updateUrl === 'string' && c.updateUrl.trim() ? c.updateUrl.trim() : '',
-    fontSize: ['small', 'medium', 'large'].includes(c.fontSize) ? c.fontSize : 'small',
+    fontSize: ['x-small', 'small', 'medium', 'large'].includes(c.fontSize) ? c.fontSize : 'small',
   };
 }
 
 /* 字体缩放：读取页面 --dsw-font-*-font-size 变量并按系数内联覆盖（布局不动，纯字体） */
-const FONT_SCALES = { small: 0.85, medium: 1.0, large: 1.15 };
+const FONT_SCALES = { 'x-small': 0.75, small: 0.85, medium: 1.0, large: 1.15 };
 
 function applyFontScale(win) {
   if (!win || win.isDestroyed()) return;
@@ -342,6 +342,237 @@ async function updateUsagePanel(win) {
   try { await win.webContents.executeJavaScript(js); } catch (e) { writeLog('usage update failed: ' + e.message); }
 }
 
+
+/* ---------------- 外观面板（Look & Feel，客户端启动自动注入） ---------------- */
+
+const LOOK_FONT_SHORTHANDS = {
+  '--dsw-font-markdown-h1': ['700', 24, 34, 'var(--dsw-font-family)'],
+  '--dsw-font-markdown-h2': ['700', 22, 32, 'var(--dsw-font-family)'],
+  '--dsw-font-markdown-h3': ['700', 20, 30, 'var(--dsw-font-family)'],
+  '--dsw-font-markdown-h4': ['600', 16, 28, 'var(--dsw-font-family)'],
+  '--dsw-font-markdown-base': ['400', 16, 28, 'var(--dsw-font-family)'],
+  '--dsw-font-markdown-base-strong': ['600', 16, 28, 'var(--dsw-font-family)'],
+  '--dsw-font-markdown-base-italic': ['italic 400', 16, 28, 'var(--dsw-font-family)'],
+  '--dsw-font-markdown-base-strong-italic': ['italic 600', 16, 28, 'var(--dsw-font-family)'],
+  '--dsw-font-markdown-table': ['400', 15, 25, 'var(--dsw-font-family)'],
+  '--dsw-font-markdown-table-head': ['500', 15, 25, 'var(--dsw-font-family)'],
+  '--dsw-font-markdown-small': ['400', 14, 24, 'var(--dsw-font-family)'],
+  '--dsw-font-markdown-small-strong': ['600', 14, 24, 'var(--dsw-font-family)'],
+  '--dsw-font-markdown-small-italic': ['italic 400', 14, 24, 'var(--dsw-font-family)'],
+  '--dsw-font-markdown-small-strong-italic': ['italic 600', 14, 24, 'var(--dsw-font-family)'],
+  '--dsw-font-markdown-code': ['400', 14, 22, 'var(--ds-font-family-code)'],
+  '--dsw-font-markdown-code-block': ['400', 13, 22, 'var(--ds-font-family-code)'],
+  '--dsw-font-markdown-code-block-small': ['400', 12, 18, 'var(--ds-font-family-code)'],
+  '--dsw-font-xl-24': ['600', 24, 32, 'var(--dsw-font-family)'],
+  '--dsw-font-l-20': ['500', 20, 28, 'var(--dsw-font-family)'],
+  '--dsw-font-m-18': ['500', 16, 28, 'var(--dsw-font-family)'],
+  '--dsw-font-base-16': ['400', 16, 24, 'var(--dsw-font-family)'],
+  '--dsw-font-base-strong-16': ['500', 16, 24, 'var(--dsw-font-family)'],
+  '--dsw-font-s-14': ['400', 14, 22, 'var(--dsw-font-family)'],
+  '--dsw-font-s-strong-14': ['500', 14, 22, 'var(--dsw-font-family)'],
+  '--dsw-font-xs-13': ['400', 13, 20, 'var(--dsw-font-family)'],
+  '--dsw-font-xs-strong-13': ['500', 13, 20, 'var(--dsw-font-family)'],
+  '--dsw-font-xxs-12': ['400', 12, 18, 'var(--dsw-font-family)'],
+  '--dsw-font-xxs-strong-12': ['500', 12, 18, 'var(--dsw-font-family)'],
+  '--dsw-font-xxxs-11': ['400', 11, 14, 'var(--dsw-font-family)'],
+  '--dsw-font-xxxs-strong-11': ['500', 11, 14, 'var(--dsw-font-family)']
+};
+const LOOK_FONT_PRESETS = [
+  { id: 'xs', label: '特小', scale: 0.75 },
+  { id: 'sm', label: '小', scale: 0.85 },
+  { id: 'md', label: '中', scale: 1.0 },
+  { id: 'lg', label: '大', scale: 1.15 }
+];
+const LOOK_PALETTES = [
+  { id: 'default', label: '默认', tokens: null },
+  { id: 'ocean', label: '深海蓝', tokens: { '--dsw-alias-brand-primary': { light: '#2563eb', dark: '#60a5fa' }, '--dsw-alias-state-business-primary': { light: '#2563eb', dark: '#60a5fa' }, '--dsw-alias-state-business-tertiary': { light: '#dbeafe', dark: '#1e3a8a' }, '--dsw-specific-sidebar-fill': { light: '#eaf2ff', dark: '#14223f' }, '--dsw-alias-bg-base': { light: '#f5f8ff', dark: '#101827' }, '--dsw-alias-bg-layer-1': { light: '#ffffff', dark: '#16233c' }, '--dsw-alias-bg-layer-2': { light: '#ffffff', dark: '#1b2a47' }, '--dsw-alias-bg-layer-3': { light: '#ffffff', dark: '#20304f' }, '--dsw-specific-bubble': { light: '#e8f0fe', dark: '#1e3a5f' }, '--dsw-specific-bubble-highlight': { light: '#d8e6fc', dark: '#274b75' }, '--dsw-specific-input-major': { light: '#ffffff', dark: '#16233c' } } },
+  { id: 'forest', label: '森林绿', tokens: { '--dsw-alias-brand-primary': { light: '#059669', dark: '#34d399' }, '--dsw-alias-state-business-primary': { light: '#059669', dark: '#34d399' }, '--dsw-alias-state-business-tertiary': { light: '#d1fae5', dark: '#064e3b' }, '--dsw-specific-sidebar-fill': { light: '#e9f8f1', dark: '#0c2b21' }, '--dsw-alias-bg-base': { light: '#f3faf7', dark: '#0f1f1a' }, '--dsw-alias-bg-layer-1': { light: '#ffffff', dark: '#142920' }, '--dsw-alias-bg-layer-2': { light: '#ffffff', dark: '#183128' }, '--dsw-alias-bg-layer-3': { light: '#ffffff', dark: '#1c382d' }, '--dsw-specific-bubble': { light: '#e2f5ec', dark: '#1c3d30' }, '--dsw-specific-bubble-highlight': { light: '#cdefdd', dark: '#22503e' }, '--dsw-specific-input-major': { light: '#ffffff', dark: '#142920' } } },
+  { id: 'ember', label: '暖橙', tokens: { '--dsw-alias-brand-primary': { light: '#ea580c', dark: '#fb923c' }, '--dsw-alias-state-business-primary': { light: '#ea580c', dark: '#fb923c' }, '--dsw-alias-state-business-tertiary': { light: '#ffedd5', dark: '#7c2d12' }, '--dsw-specific-sidebar-fill': { light: '#fef3e8', dark: '#2b1608' }, '--dsw-alias-bg-base': { light: '#fdf8f2', dark: '#1f1408' }, '--dsw-alias-bg-layer-1': { light: '#ffffff', dark: '#2a1a0d' }, '--dsw-alias-bg-layer-2': { light: '#ffffff', dark: '#33200f' }, '--dsw-alias-bg-layer-3': { light: '#ffffff', dark: '#3a2512' }, '--dsw-specific-bubble': { light: '#fdeeda', dark: '#3d2712' }, '--dsw-specific-bubble-highlight': { light: '#fce1c0', dark: '#4d3218' }, '--dsw-specific-input-major': { light: '#ffffff', dark: '#2a1a0d' } } }
+];
+function lookReadPrefs() {
+  const defaults = { font: 'sm', palette: 'default', custom: { brand: '#2563eb', bg: '#f5f8ff' } };
+  try {
+    const raw = localStorage.getItem('dsh.lookandfeel');
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw);
+    return {
+      font: parsed.font || defaults.font,
+      palette: parsed.palette || defaults.palette,
+      custom: { brand: (parsed.custom && parsed.custom.brand) || defaults.custom.brand, bg: (parsed.custom && parsed.custom.bg) || defaults.custom.bg }
+    };
+  } catch (e) { return defaults; }
+}
+function lookSavePrefs(prefs) {
+  try { localStorage.setItem('dsh.lookandfeel', JSON.stringify(prefs)); } catch (e) {}
+}
+function lookIsDark() {
+  return document.body && (document.body.dataset.dsDarkTheme !== undefined || document.body.hasAttribute('data-ds-dark-theme'));
+}
+const LOOK_COLOR_VARS = ['--dsw-alias-brand-primary','--dsw-alias-state-business-primary','--dsw-alias-state-business-tertiary','--dsw-specific-sidebar-fill','--dsw-alias-bg-base','--dsw-alias-bg-layer-1','--dsw-alias-bg-layer-2','--dsw-alias-bg-layer-3','--dsw-specific-bubble','--dsw-specific-bubble-highlight','--dsw-specific-input-major'];
+function lookApplyFont(scale) {
+  const t = document.body; if (!t) return;
+  for (const [name, arr] of Object.entries(LOOK_FONT_SHORTHANDS)) {
+    const size = Math.round(arr[1] * scale);
+    t.style.setProperty(name, arr[0] + ' ' + size + 'px/' + arr[2] + 'px ' + arr[3]);
+  }
+}
+function lookResetFont() {
+  if (!document.body) return;
+  for (const name of Object.keys(LOOK_FONT_SHORTHANDS)) document.body.style.removeProperty(name);
+}
+function lookApplyPalette(tokens) {
+  const t = document.body; if (!t) return;
+  if (!tokens) { for (const n of LOOK_COLOR_VARS) t.style.removeProperty(n); return; }
+  const dark = lookIsDark();
+  for (const [name, pair] of Object.entries(tokens)) t.style.setProperty(name, dark ? pair.dark : pair.light);
+}
+function lookLighten(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, (n >> 16) + amt), g = Math.min(255, ((n >> 8) & 255) + amt), b = Math.min(255, (n & 255) + amt);
+  return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+}
+function lookDarken(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, (n >> 16) - amt), g = Math.max(0, ((n >> 8) & 255) - amt), b = Math.max(0, (n & 255) - amt);
+  return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+}
+function lookCustomTokens(brand, bg) {
+  const isD = lookIsDark();
+  const layer = isD ? lookLighten(bg, 14) : '#ffffff';
+  const layer2 = isD ? lookLighten(bg, 24) : '#ffffff';
+  const layer3 = isD ? lookLighten(bg, 32) : '#ffffff';
+  const bubble = isD ? lookLighten(bg, 30) : lookLighten(bg, 8);
+  const brandDark = isD ? lookLighten(brand, 40) : brand;
+  return {
+    '--dsw-alias-brand-primary': { light: brand, dark: brandDark },
+    '--dsw-alias-state-business-primary': { light: brand, dark: brandDark },
+    '--dsw-alias-state-business-tertiary': { light: lookLighten(brand, 150), dark: lookDarken(brand, 80) },
+    '--dsw-specific-sidebar-fill': { light: lookLighten(bg, 12), dark: lookDarken(bg, 16) },
+    '--dsw-alias-bg-base': { light: bg, dark: bg },
+    '--dsw-alias-bg-layer-1': { light: layer, dark: layer },
+    '--dsw-alias-bg-layer-2': { light: layer2, dark: layer2 },
+    '--dsw-alias-bg-layer-3': { light: layer3, dark: layer3 },
+    '--dsw-specific-bubble': { light: bubble, dark: bubble },
+    '--dsw-specific-bubble-highlight': { light: lookLighten(bg, 20), dark: lookLighten(bg, 44) },
+    '--dsw-specific-input-major': { light: layer, dark: layer }
+  };
+}
+function injectLookPanel() {
+  if (!document.body || document.getElementById('dsh-look-panel') || document.getElementById('dsh-look-fab')) return;
+  let prefs = lookReadPrefs();
+  const fab = document.createElement('button');
+  fab.id = 'dsh-look-fab';
+  fab.textContent = '🎨 外观';
+  fab.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:99998;padding:8px 14px;border-radius:999px;cursor:pointer;border:1px solid var(--dsw-alias-border-l2,rgba(0,0,0,.1));background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-primary,#111);font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.12);display:none';
+  const panel = document.createElement('div');
+  panel.id = 'dsh-look-panel';
+  panel.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:99998;background:var(--dsw-alias-bg-layer-2,#fff);border:1px solid var(--dsw-alias-border-l2,rgba(0,0,0,.1));border-radius:14px;padding:14px 16px;min-width:280px;box-shadow:0 12px 32px rgba(0,0,0,.15);font-family:-apple-system,"PingFang SC",sans-serif;font-size:13px;color:var(--dsw-alias-label-primary,#111)';
+  const head = document.createElement('div');
+  head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-weight:600;font-size:14px';
+  const title = document.createElement('span'); title.textContent = '🎨 外观';
+  const close = document.createElement('button'); close.textContent = '×';
+  close.style.cssText = 'background:none;border:none;cursor:pointer;font-size:16px;color:var(--dsw-alias-label-secondary,#666);padding:0 4px';
+  close.addEventListener('click', () => { panel.style.display = 'none'; fab.style.display = 'block'; });
+  head.appendChild(title); head.appendChild(close);
+  panel.appendChild(head);
+  // 字体行
+  const fontRow = document.createElement('div');
+  fontRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:6px 0';
+  const fontLabel = document.createElement('span');
+  fontLabel.style.cssText = 'font-size:13px;color:var(--dsw-alias-label-primary,#111)';
+  fontLabel.textContent = '字体大小';
+  const fontGroup = document.createElement('div');
+  fontGroup.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
+  const mkBtn = (label, active) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.style.cssText = 'padding:3px 10px;border-radius:7px;border:1px solid var(--dsw-alias-border-l2,rgba(0,0,0,.1));font-size:12px;cursor:pointer;background:' + (active ? 'var(--dsw-alias-brand-primary,#2563eb)' : 'transparent') + ';color:' + (active ? '#fff' : 'var(--dsw-alias-label-secondary,#666)');
+    return b;
+  };
+  LOOK_FONT_PRESETS.forEach((f) => {
+    const b = mkBtn(f.label, prefs.font === f.id);
+    b.addEventListener('click', () => {
+      prefs.font = f.id; lookSavePrefs(prefs);
+      fontGroup.querySelectorAll('button').forEach((x) => { x.style.background = 'transparent'; x.style.color = 'var(--dsw-alias-label-secondary,#666)'; });
+      b.style.background = 'var(--dsw-alias-brand-primary,#2563eb)'; b.style.color = '#fff';
+      if (f.scale === 1.0) lookResetFont(); else lookApplyFont(f.scale);
+    });
+    fontGroup.appendChild(b);
+  });
+  fontRow.appendChild(fontLabel); fontRow.appendChild(fontGroup);
+  panel.appendChild(fontRow);
+  // 主题色行
+  const palRow = document.createElement('div');
+  palRow.style.cssText = 'display:flex;align-items:flex-start;justify-content:space-between;padding:6px 0;gap:8px';
+  const palLabel = document.createElement('span');
+  palLabel.style.cssText = 'font-size:13px;color:var(--dsw-alias-label-primary,#111);padding-top:4px';
+  palLabel.textContent = '主题色';
+  const palRight = document.createElement('div');
+  palRight.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;gap:6px';
+  const palGroup = document.createElement('div');
+  palGroup.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end';
+  const customRow = document.createElement('div');
+  customRow.style.cssText = 'display:' + (prefs.palette === 'custom' ? 'flex' : 'none') + ';gap:10px;align-items:center';
+  const mkColor = (label, value) => {
+    const wrap = document.createElement('label');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:11px;color:var(--dsw-alias-label-secondary,#666)';
+    wrap.textContent = label;
+    const input = document.createElement('input');
+    input.type = 'color'; input.value = value;
+    input.style.cssText = 'width:26px;height:22px;border:none;padding:0;background:none;cursor:pointer';
+    wrap.appendChild(input);
+    return { wrap: wrap, input: input };
+  };
+  const brandPicker = mkColor('主题', prefs.custom.brand);
+  const bgPicker = mkColor('背景', prefs.custom.bg);
+  customRow.appendChild(brandPicker.wrap);
+  customRow.appendChild(bgPicker.wrap);
+  palRight.appendChild(customRow);
+  LOOK_PALETTES.forEach((p) => {
+    const b = mkBtn(p.label, prefs.palette === p.id);
+    b.addEventListener('click', () => {
+      prefs.palette = p.id; lookSavePrefs(prefs);
+      palGroup.querySelectorAll('button').forEach((x) => { x.style.background = 'transparent'; x.style.color = 'var(--dsw-alias-label-secondary,#666)'; });
+      b.style.background = 'var(--dsw-alias-brand-primary,#2563eb)'; b.style.color = '#fff';
+      customRow.style.display = 'none';
+      lookApplyPalette(p.tokens);
+    });
+    palGroup.appendChild(b);
+  });
+  const customBtn = mkBtn('自定义', prefs.palette === 'custom');
+  customBtn.addEventListener('click', () => {
+    prefs.palette = 'custom'; lookSavePrefs(prefs);
+    palGroup.querySelectorAll('button').forEach((x) => { x.style.background = 'transparent'; x.style.color = 'var(--dsw-alias-label-secondary,#666)'; });
+    customBtn.style.background = 'var(--dsw-alias-brand-primary,#2563eb)'; customBtn.style.color = '#fff';
+    customRow.style.display = 'flex';
+    lookApplyPalette(lookCustomTokens(prefs.custom.brand, prefs.custom.bg));
+  });
+  palGroup.appendChild(customBtn);
+  brandPicker.input.addEventListener('input', () => {
+    prefs.custom.brand = brandPicker.input.value; lookSavePrefs(prefs);
+    if (prefs.palette === 'custom') lookApplyPalette(lookCustomTokens(prefs.custom.brand, prefs.custom.bg));
+  });
+  bgPicker.input.addEventListener('input', () => {
+    prefs.custom.bg = bgPicker.input.value; lookSavePrefs(prefs);
+    if (prefs.palette === 'custom') lookApplyPalette(lookCustomTokens(prefs.custom.brand, prefs.custom.bg));
+  });
+  palRow.appendChild(palLabel); palRow.appendChild(palRight);
+  panel.appendChild(palRow);
+  const note = document.createElement('div');
+  note.textContent = '设置保存在本地；自定义色：主题色 + 主区背景色。';
+  note.style.cssText = 'margin-top:8px;font-size:11px;color:var(--dsw-alias-label-tertiary,#999);line-height:1.6';
+  panel.appendChild(note);
+  fab.addEventListener('click', () => { fab.style.display = 'none'; panel.style.display = 'block'; });
+  document.body.appendChild(fab);
+  document.body.appendChild(panel);
+  // 应用已保存偏好
+  const cur = LOOK_FONT_PRESETS.find((f) => f.id === prefs.font);
+  if (cur && cur.scale !== 1.0) lookApplyFont(cur.scale);
+  if (prefs.palette === 'custom') lookApplyPalette(lookCustomTokens(prefs.custom.brand, prefs.custom.bg));
+  else { const cp = LOOK_PALETTES.find((p) => p.id === prefs.palette); if (cp) lookApplyPalette(cp.tokens); }
+}
+
+
 function injectUsagePanel(win) {
   if (!win || win.isDestroyed()) return;
   win.webContents.insertCSS(USAGE_CARD_CSS).catch(() => {});
@@ -360,62 +591,56 @@ function injectUsagePanel(win) {
       '<div>更新 <span class="ds-u-time">…</span></div>' +
       '<a href="https://platform.deepseek.com/usage" target="_blank" rel="noopener">查看用量明细 ↗</a>' +
       '</div>';
+    d.querySelector('.ds-usage-head').addEventListener('click', () => d.classList.toggle('open'));
     d.querySelector('a').addEventListener('click', (e) => {
       e.preventDefault();
       window.open('https://platform.deepseek.com/usage', '_blank');
     });
-    /* 拖动定位（位置持久化到 localStorage） */
-    const head = d.querySelector('.ds-usage-head');
-    let drag = null;        // {sx, sy, ox, oy}
-    let dragMoved = false;  // 区分「点击展开」与「拖动」
-    // 恢复上次拖动位置
-    try {
-      const saved = JSON.parse(localStorage.getItem('dsh-card-pos') || 'null');
-      if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
-        d.style.left = saved.x + 'px';
-        d.style.top = saved.y + 'px';
-        d.style.bottom = 'auto';
+    // 拖拽支持：鼠标按住头部可拖动浮窗，位置记忆在 localStorage
+    (function setupDrag() {
+      const saved = localStorage.getItem('dsh.usageCard.pos');
+      if (saved) {
+        try {
+          const p = JSON.parse(saved);
+          d.style.left = p.left + 'px';
+          d.style.top = p.top + 'px';
+          d.style.bottom = 'auto';
+        } catch (e) {}
       }
-    } catch {}
-    head.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
-      const r = d.getBoundingClientRect();
-      drag = { sx: e.clientX, sy: e.clientY, ox: r.left, oy: r.top };
-      dragMoved = false;
-      const onMove = (ev) => {
-        if (!drag) return;
-        const dx = ev.clientX - drag.sx;
-        const dy = ev.clientY - drag.sy;
-        if (!dragMoved && Math.hypot(dx, dy) < 4) return; // 4px 阈值内视为点击
-        dragMoved = true;
-        const x = Math.max(4, Math.min(drag.ox + dx, innerWidth - d.offsetWidth - 4));
-        const y = Math.max(4, Math.min(drag.oy + dy, innerHeight - d.offsetHeight - 4));
-        d.style.left = x + 'px';
-        d.style.top = y + 'px';
-        d.style.right = 'auto';
+      const head = d.querySelector('.ds-usage-head');
+      let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+      head.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        dragging = true;
+        const r = d.getBoundingClientRect();
+        startX = e.clientX; startY = e.clientY;
+        origLeft = r.left; origTop = r.top;
         d.style.bottom = 'auto';
-      };
-      const onUp = () => {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        if (drag && dragMoved) {
-          try {
-            localStorage.setItem('dsh-card-pos', JSON.stringify({
-              x: parseInt(d.style.left, 10),
-              y: parseInt(d.style.top, 10),
-            }));
-          } catch {}
-        }
-        drag = null;
-      };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-    });
-    head.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (dragMoved) { dragMoved = false; return; } // 刚拖完：不触发展开
-      d.classList.toggle('open');
-    });
+        d.style.left = r.left + 'px';
+        d.style.top = r.top + 'px';
+        d.style.cursor = 'grabbing';
+        d.style.transition = 'none';
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const nl = origLeft + (e.clientX - startX);
+        const nt = origTop + (e.clientY - startY);
+        d.style.left = Math.max(0, nl) + 'px';
+        d.style.top = Math.max(0, nt) + 'px';
+      });
+      window.addEventListener('mouseup', () => {
+        if (!dragging) return;
+        dragging = false;
+        d.style.cursor = 'pointer';
+        d.style.transition = '';
+        try {
+          const r = d.getBoundingClientRect();
+          localStorage.setItem('dsh.usageCard.pos', JSON.stringify({ left: r.left, top: r.top }));
+        } catch (e) {}
+      });
+    })();
     document.body.appendChild(d);
   })()`).catch(() => {});
   updateUsagePanel(win);
@@ -569,6 +794,25 @@ function createWindow(url) {
   mainWindow.webContents.on('did-finish-load', () => {
     applyFontScale(mainWindow);
     injectUsagePanel(mainWindow);
+        const lookScript = () => {
+      // 从 app.asar 内资源读取注入脚本，避免字符串转义问题
+      const scriptPath = path.join(__dirname, 'look-inject.js');
+      try {
+        const lookJs = fs.readFileSync(scriptPath, 'utf8');
+        // 捕获页面 console 错误（诊断用）
+        mainWindow.webContents.on('console-message', (e, level, message, line, sourceId) => {
+          if (level >= 3) writeLog('renderer console[' + level + ']: ' + message);
+        });
+        mainWindow.webContents.executeJavaScript(lookJs)
+          .then(() => writeLog('look panel injected'))
+          .catch((e) => writeLog('look panel inject failed: ' + e.message));
+      } catch (e) {
+        writeLog('look panel script read failed: ' + e.message);
+      }
+    };
+    lookScript();
+    setTimeout(lookScript, 1500);
+    setTimeout(lookScript, 4000);
   });
 
   // 外部链接用系统浏览器打开
@@ -823,6 +1067,7 @@ function createTray() {
     {
       label: '字体大小',
       submenu: [
+        { label: '特小', type: 'radio', checked: config().fontSize === 'x-small', click: () => { saveConfig({ fontSize: 'x-small' }); applyFontScale(mainWindow); } },
         { label: '小', type: 'radio', checked: config().fontSize === 'small', click: () => { saveConfig({ fontSize: 'small' }); applyFontScale(mainWindow); } },
         { label: '中', type: 'radio', checked: config().fontSize === 'medium', click: () => { saveConfig({ fontSize: 'medium' }); applyFontScale(mainWindow); } },
         { label: '大', type: 'radio', checked: config().fontSize === 'large', click: () => { saveConfig({ fontSize: 'large' }); applyFontScale(mainWindow); } },
@@ -927,18 +1172,22 @@ if (!gotLock) {
     // 托盘常驻：不退出（退出走托盘菜单）
   });
 
-  app.on('before-quit', async (e) => {
+  app.on('before-quit', (e) => {
+    // 任何退出路径（托盘菜单 / 顶部菜单 Cmd+Q / dock 退出）都先标记 isQuitting，
+    // 这样窗口 close 处理器会放行而不是隐藏窗口。
     if (!isQuitting) {
-      e.preventDefault();
       isQuitting = true;
-      await stopService();
-      app.quit();
+      // 不 preventDefault：让 Electron 正常关闭窗口并退出；
+      // 服务子进程的清理统一在 will-quit 中同步完成。
     }
   });
 
   app.on('will-quit', () => {
-    if (serviceProc) {
+    if (serviceProc && serviceProc.pid) {
+      writeLog('will-quit: killing service pid=' + serviceProc.pid);
       try { process.kill(serviceProc.pid, 'SIGKILL'); } catch {}
+      serviceProc = null;
     }
+    if (tray) { try { tray.destroy(); } catch {} }
   });
 }
