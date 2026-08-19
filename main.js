@@ -360,10 +360,61 @@ function injectUsagePanel(win) {
       '<div>更新 <span class="ds-u-time">…</span></div>' +
       '<a href="https://platform.deepseek.com/usage" target="_blank" rel="noopener">查看用量明细 ↗</a>' +
       '</div>';
-    d.querySelector('.ds-usage-head').addEventListener('click', () => d.classList.toggle('open'));
     d.querySelector('a').addEventListener('click', (e) => {
       e.preventDefault();
       window.open('https://platform.deepseek.com/usage', '_blank');
+    });
+    /* 拖动定位（位置持久化到 localStorage） */
+    const head = d.querySelector('.ds-usage-head');
+    let drag = null;        // {sx, sy, ox, oy}
+    let dragMoved = false;  // 区分「点击展开」与「拖动」
+    // 恢复上次拖动位置
+    try {
+      const saved = JSON.parse(localStorage.getItem('dsh-card-pos') || 'null');
+      if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
+        d.style.left = saved.x + 'px';
+        d.style.top = saved.y + 'px';
+        d.style.bottom = 'auto';
+      }
+    } catch {}
+    head.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      const r = d.getBoundingClientRect();
+      drag = { sx: e.clientX, sy: e.clientY, ox: r.left, oy: r.top };
+      dragMoved = false;
+      const onMove = (ev) => {
+        if (!drag) return;
+        const dx = ev.clientX - drag.sx;
+        const dy = ev.clientY - drag.sy;
+        if (!dragMoved && Math.hypot(dx, dy) < 4) return; // 4px 阈值内视为点击
+        dragMoved = true;
+        const x = Math.max(4, Math.min(drag.ox + dx, innerWidth - d.offsetWidth - 4));
+        const y = Math.max(4, Math.min(drag.oy + dy, innerHeight - d.offsetHeight - 4));
+        d.style.left = x + 'px';
+        d.style.top = y + 'px';
+        d.style.right = 'auto';
+        d.style.bottom = 'auto';
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (drag && dragMoved) {
+          try {
+            localStorage.setItem('dsh-card-pos', JSON.stringify({
+              x: parseInt(d.style.left, 10),
+              y: parseInt(d.style.top, 10),
+            }));
+          } catch {}
+        }
+        drag = null;
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+    head.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (dragMoved) { dragMoved = false; return; } // 刚拖完：不触发展开
+      d.classList.toggle('open');
     });
     document.body.appendChild(d);
   })()`).catch(() => {});
