@@ -20,7 +20,7 @@ const https = require('https');
 
 const SMOKE_TEST = process.argv.includes('--smoke-test');
 const DEFAULT_PORT = 3080;
-const DEFAULT_COMMAND = 'npx @deepseek-ai/dsh web';
+const DEFAULT_COMMAND = 'npx @deepseek-ai/dsh@0.1.0-rc.8 web';
 const START_TIMEOUT_MS = 120000;   // 服务启动等待上限
 const POLL_INTERVAL_MS = 500;
 const UPDATE_CHECK_DELAY_MS = 5000; // 启动后延迟静默检查更新
